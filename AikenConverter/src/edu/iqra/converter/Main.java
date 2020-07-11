@@ -1,6 +1,7 @@
 package edu.iqra.converter;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -12,13 +13,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellStyle;
-import org.apache.poi.ss.usermodel.FillPatternType;
-import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import javafx.application.Application;
@@ -38,9 +35,12 @@ public class Main extends Application {
 
 	private Label lblStatus;
 	private TextField fileNameText;
+	private FileChooser saveFileChooser = new FileChooser();
+	private Stage rootStage;
 
 	@Override
 	public void start(Stage stage) {
+		rootStage = stage;
 
 		HBox topRow = new HBox();
 
@@ -74,6 +74,7 @@ public class Main extends Application {
 			File selectedFile = fileChooser.showOpenDialog(stage);
 			if (selectedFile != null && selectedFile.canRead()) {
 				fileNameText.setText(selectedFile.getAbsolutePath());
+				lblStatus.setText("");
 			}
 
 		});
@@ -124,13 +125,13 @@ public class Main extends Application {
 				case 1:
 					if(line.startsWith("ANSWER"))
 					{
-						questionBank.get(questionBank.size()-1).correctAnswer = line.split(" ")[1];
+						questionBank.get(questionBank.size()-1).setCorrectAnswer(line.split(" ")[1]);
 						state.set(0);
 						break;
 					}
 					matcher = pattern.matcher(line);
 					if (matcher.find())
-						questionBank.get(questionBank.size()-1).answers.put(matcher.group(0).substring(0,1),line.substring(2).strip());
+						questionBank.get(questionBank.size()-1).getAnswers().put(matcher.group(0).substring(0,1),line.substring(2).strip());
 					break;
 				default:
 					break;
@@ -145,33 +146,70 @@ public class Main extends Application {
 
 	}
 	
-	private void printToExcel(List<Question> questionBank)
+	private void createHeaderRowOfWorksheet(Sheet sheet)
+	{
+		/*
+		 * Header Creation
+		 */
+		Row header = sheet.createRow(0);
+		 
+
+		Cell headerCell = header.createCell(0);
+		headerCell.setCellValue("Question");
+		
+		for(int i= 1; i < 11; i++)
+		{
+			header.createCell(i).setCellValue("Option "+i);			
+		}
+		
+		for(int i= 11; i < 15; i++)
+		{
+			header.createCell(i).setCellValue("Answer "+(i-10));			
+		}
+		/*
+		 * End Header Creation
+		 */
+	}
+	
+	private void printToExcel(List<Question> questionBank) throws IOException
 	{
 		Workbook workbook = new XSSFWorkbook();
 		 
-		Sheet sheet = workbook.createSheet("Persons");
-		sheet.setColumnWidth(0, 6000);
-		sheet.setColumnWidth(1, 4000);
+		Sheet sheet = workbook.createSheet("Quiz");
+		sheet.setColumnWidth(0, 20);
+		
+		createHeaderRowOfWorksheet(sheet);
+
+		/*
+		 * Data Insertion
+		 */
+		int rowCount = 1;
+		for(Question question : questionBank)
+		{
+			Row header = sheet.createRow(rowCount++);
+			header.createCell(0).setCellValue(question.getQuestion());
+			int answerCount = 1;
+			for(var entry : question.getAnswers().entrySet())
+			{
+				if(answerCount > 10)
+					break;
+				header.createCell(answerCount++).setCellValue(entry.getValue());
+			}
+			header.createCell(11).setCellValue(question.getAnswers().get(question.getCorrectAnswer()));
+		}
+		
+		/*
+		 * End Data Insertion
+		 */
+
+		saveFileChooser.getExtensionFilters().addAll(new FileChooser.ExtensionFilter("Excel Files ", "*.xlsx"));
+		File file = saveFileChooser.showSaveDialog(rootStage);
+		
+		FileOutputStream outputStream = new FileOutputStream(file.getAbsolutePath());
+		workbook.write(outputStream);
+		workbook.close();
+		lblStatus.setText("Saved Successfully ");
 		 
-		Row header = sheet.createRow(0);
-		 
-		CellStyle headerStyle = workbook.createCellStyle();
-		headerStyle.setFillForegroundColor(IndexedColors.LIGHT_BLUE.getIndex());
-		headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-		 
-		XSSFFont  font = ((XSSFWorkbook) workbook).createFont();
-		font.setFontName("Arial");
-		font.setFontHeightInPoints((short) 16);
-		font.setBold(true);
-		headerStyle.setFont(font);
-		 
-		Cell headerCell = header.createCell(0);
-		headerCell.setCellValue("Name");
-		headerCell.setCellStyle(headerStyle);
-		 
-		headerCell = header.createCell(1);
-		headerCell.setCellValue("Age");
-		headerCell.setCellStyle(headerStyle);
 	}
 
 	public static void main(String[] args) {
@@ -181,11 +219,31 @@ public class Main extends Application {
 }
 
 class Question{
-	String question;
-	LinkedHashMap<String, String> answers = new LinkedHashMap<>();
-	String correctAnswer;	
+	private String question;
+	private LinkedHashMap<String, String> answers = new LinkedHashMap<>();
+	private String correctAnswer;	
 	Question(String question)
 	{
 		this.question = question;
 	}
+	public String getQuestion() {
+		return question;
+	}
+	public void setQuestion(String question) {
+		this.question = question;
+	}
+	public LinkedHashMap<String, String> getAnswers() {
+		return answers;
+	}
+	public void setAnswers(LinkedHashMap<String, String> answers) {
+		this.answers = answers;
+	}
+	public String getCorrectAnswer() {
+		return correctAnswer;
+	}
+	public void setCorrectAnswer(String correctAnswer) {
+		this.correctAnswer = correctAnswer;
+	}
+	
+	
 }
